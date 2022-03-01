@@ -8,9 +8,7 @@ int main()
 
     // Generate 256 Private key from mnemonic
     mnemonic_to_seed(mnemonic_phrase, "", seed, 0);
-    char *wif_key[58];
-
-    // int res = ecdsa_get_wif(seed, 1, 0, wif_key, 58);
+    
     printf("Seed: ");
     for(int i = 0; i < 64; i++){
     	printf("%x", seed[i]);
