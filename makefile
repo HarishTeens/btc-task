@@ -1,4 +1,12 @@
-CFLAGS = -I./trezor-firmware/crypto
+src=$(wildcard main.c Crypto/*.c Crypto/ed25519-donna/*.c Crypto/chacha20poly1305/*.c Crypto/aes/aes_modes.c Crypto/aes/aescrypt.c Crypto/aes/aestab.c Crypto/aes/aeskey.c) 
+obj=$(src: .c=.o)
+dep=$(obj: .o=.d)
+# one dependency file for each source
 
-test:
-	gcc -o bip39 test.c ./trezor-firmware/crypto/rand.c ./trezor-firmware/crypto/memzero.c ./trezor-firmware/crypto/sha2.c ./trezor-firmware/crypto/hmac.c ./trezor-firmware/crypto/pbkdf2.c ./trezor-firmware/crypto/bip39.c $(CFLAGS)
+CFLAGS = -MMD     # option to generate a .d file during compilation
+
+main: $(obj)
+	gcc $^ -o $@ -I./Crypto -I./include
+
+%.d: %.c
+	@$(CPP) $(CFLAGS)  $< -MM -MT $(@:.d=.o) >$@ 
