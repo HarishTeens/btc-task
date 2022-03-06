@@ -1,21 +1,25 @@
 const { curly } = require('node-libcurl');
 const BASE_URL = `http://${process.env.BTC_CREDS}@127.0.0.1:19001/`;
 
-const getBalance = async () => {
+const getRootBalance = async () => {
     const { data } = await rpcHelper('getbalance', []);
     return data;
 }
 
-const getAddress = async () => {
+const getReceiveAddress = async () => {
     const { data } = await rpcHelper('getnewaddress', []);
     return data;
 }
 
-const getUTXOs = async (address) => {
-    const { data } = await rpcHelper('listunspent', [0, 9999999, [address], true]);
+const getUTXOs = async (address = "") => {
+    const { data } = await rpcHelper('listunspent', [0, 9999999, address != "" ? [address] : [], true]);
     return data;
 }
 
+const createTransaction = async (txParams) => {
+    const {data} = await rpcHelper('createrawtransaction', txParams);
+    return data;
+}
 
 
 const rpcHelper = async (method, params) => {
@@ -32,9 +36,10 @@ const rpcHelper = async (method, params) => {
 }
 
 const data = {
-    getBalance,
-    getAddress,
-    getUTXOs
+    getRootBalance,
+    getReceiveAddress,
+    getUTXOs,
+    createTransaction
 }
 
 module.exports = data;

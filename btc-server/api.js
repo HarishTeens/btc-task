@@ -1,9 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { getBalance,  getAddress} = require("./controller");
+const { getBalance, send } = require("./controller");
 
 router.get("/getBalance", getBalance);
-router.get("/getAddress", getAddress);
-router.post("/send",);
+router.post("/send", send);
 
 module.exports = router;
