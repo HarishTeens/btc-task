@@ -38,22 +38,50 @@ const send = async (req, res) => {
 
     // 3. create the transaction
     const { result: receiveAddress } = await data.getReceiveAddress();
-    const txParams = [
+    let txParams = [
         requiredUTXOs.map(utxo => ({ txid: utxo.txid, vout: utxo.vout })),
         { [address]: amount, [receiveAddress]: collectedAmount - requiredAmount }
     ]
     const { result: unsignedTx } = await data.createTransaction(txParams);
-    res.json({ unsignedTx });
 
-    //     4. get prev tx info
-    //     5. dump and get private keys
-    // 6. sign
+    // 4. dump and get private keys
+    const requiredAddresses = new Set();
+    for (let utxo of requiredUTXOs) {
+        requiredAddresses.add(utxo.address);
+    }
+    let requiredKeys = await Promise.all([...requiredAddresses].map(async address => {
+        const { result } = await data.dumpPrivateKey(address);
+        return result;
+    }))
+
+    // 5. sign the transaction
+    const prevTxs = requiredUTXOs.map(utxo => ({
+        txid: utxo.txid,
+        vout: utxo.vout,
+        scriptPubKey: utxo.scriptPubKey,
+        amount: utxo.amount
+    }));
+    txParams = [
+        unsignedTx,
+        prevTxs,
+        requiredKeys
+    ]
+    const { result: signedTx } = await data.signTransaction(txParams);
     // 7. send it
+    const { result: txid } = await data.sendTransaction(signedTx.hex);
+    res.json({ txid: txid });
+}
+
+const getTransaction = async (req, res) => {
+    const txid = req.query.txid;
+    const { result: result } = await data.getTransaction(txid);
+    res.json(result);
 }
 
 const controller = {
     getBalance,
-    send
+    send,
+    getTransaction
 }
 
 module.exports = controller;

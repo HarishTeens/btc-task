@@ -21,6 +21,27 @@ const createTransaction = async (txParams) => {
     return data;
 }
 
+const dumpPrivateKey = async (address) => {
+    const { data } = await rpcHelper('dumpprivkey', [address]);
+    return data;
+}
+
+const signTransaction = async (txParams) => {
+    const { data } = await rpcHelper('signrawtransaction', txParams);
+    return data;
+}
+
+const sendTransaction = async (tx) => {
+    const { data } = await rpcHelper('sendrawtransaction', [tx]);
+    return data;
+}
+
+const getTransaction = async (txid) => {
+    const { data } = await rpcHelper('gettransaction', [txid]);
+    return data;
+}
+
+
 
 const rpcHelper = async (method, params) => {
     // a function to RPC call to the node
@@ -39,7 +60,11 @@ const data = {
     getRootBalance,
     getReceiveAddress,
     getUTXOs,
-    createTransaction
+    createTransaction,
+    dumpPrivateKey,
+    signTransaction,
+    sendTransaction,
+    getTransaction
 }
 
 module.exports = data;
