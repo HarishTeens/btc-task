@@ -11,6 +11,11 @@ const getAddress = async () => {
     return data;
 }
 
+const getUTXOs = async (address) => {
+    const { data } = await rpcHelper('listunspent', [0, 9999999, [address], true]);
+    return data;
+}
+
 
 
 const rpcHelper = async (method, params) => {
@@ -28,7 +33,8 @@ const rpcHelper = async (method, params) => {
 
 const data = {
     getBalance,
-    getAddress
+    getAddress,
+    getUTXOs
 }
 
 module.exports = data;
