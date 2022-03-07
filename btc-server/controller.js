@@ -1,5 +1,14 @@
 const data = require("./data");
 
+const generateWallet = async (req, res) => {
+    const { result: address } = await data.getNewAddress();
+    const { result: privateKey } = await data.dumpPrivateKey(address);
+    res.json({
+        address,
+        privateKey
+    })
+}
+
 const getBalance = async (req, res) => {
     const address = req.query.address;
     const response = await data.getUTXOs(address);
@@ -20,8 +29,9 @@ const send = async (req, res) => {
         return;
     }
 
-    // 2. find all UTXOs required to send amount
-    const { result: utxos } = await data.getUTXOs();
+    // 2. find all UTXOs from rootAddress
+    const { result: utxos } = await data.getUTXOs(process.env.ROOT_WALLET_ADDRESS);
+
     let requiredUTXOs = [];
     let collectedAmount = 0;
     const requiredAmount = amount + 0.001; // Add Gas Fees
@@ -37,10 +47,11 @@ const send = async (req, res) => {
     };
 
     // 3. create the transaction
-    const { result: receiveAddress } = await data.getReceiveAddress();
+    const { result: changeAddress } = await data.getChangeAddress();
+    const balance = collectedAmount - requiredAmount;
     let txParams = [
         requiredUTXOs.map(utxo => ({ txid: utxo.txid, vout: utxo.vout })),
-        { [address]: amount, [receiveAddress]: collectedAmount - requiredAmount }
+        { [address]: amount, [changeAddress]: balance.toPrecision(8) }
     ]
     const { result: unsignedTx } = await data.createTransaction(txParams);
 
@@ -69,19 +80,22 @@ const send = async (req, res) => {
     const { result: signedTx } = await data.signTransaction(txParams);
     // 7. send it
     const { result: txid } = await data.sendTransaction(signedTx.hex);
+    // 8. Mine a block to confirm the transaction
+    const { result: blockHash } = await data.generateBlock(address);
     res.json({ txid: txid });
 }
 
 const getTransaction = async (req, res) => {
     const txid = req.query.txid;
-    const { result: result } = await data.getTransaction(txid);
+    const { result } = await data.getTransaction(txid);
     res.json(result);
 }
 
 const controller = {
     getBalance,
     send,
-    getTransaction
+    getTransaction,
+    generateWallet
 }
 
 module.exports = controller;

@@ -6,8 +6,18 @@ const getRootBalance = async () => {
     return data;
 }
 
-const getReceiveAddress = async () => {
+const listTransactions = async (params = []) => {
+    const { data } = await rpcHelper('listtransactions', params);
+    return data;
+}
+
+const getNewAddress = async () => {
     const { data } = await rpcHelper('getnewaddress', []);
+    return data;
+}
+
+const getChangeAddress = async () => {
+    const { data } = await rpcHelper('getrawchangeaddress', []);
     return data;
 }
 
@@ -41,6 +51,11 @@ const getTransaction = async (txid) => {
     return data;
 }
 
+const generateBlock = async (address) => {
+    const { data } = await rpcHelper('generatetoaddress', [1, address]);
+    return data;
+}
+
 
 
 const rpcHelper = async (method, params) => {
@@ -58,13 +73,16 @@ const rpcHelper = async (method, params) => {
 
 const data = {
     getRootBalance,
-    getReceiveAddress,
+    getChangeAddress,
     getUTXOs,
     createTransaction,
     dumpPrivateKey,
     signTransaction,
     sendTransaction,
-    getTransaction
+    getTransaction,
+    generateBlock,
+    listTransactions,
+    getNewAddress
 }
 
 module.exports = data;
