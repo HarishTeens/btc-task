@@ -31,6 +31,11 @@ const createTransaction = async (txParams) => {
     return data;
 }
 
+const importPrivKey = async (privKey) => {
+    const { data } = await rpcHelper('importprivkey', [privKey, "", false]);
+    return data;
+}
+
 const dumpPrivateKey = async (address) => {
     const { data } = await rpcHelper('dumpprivkey', [address]);
     return data;
@@ -82,7 +87,8 @@ const data = {
     getTransaction,
     generateBlock,
     listTransactions,
-    getNewAddress
+    getNewAddress,
+    importPrivKey
 }
 
 module.exports = data;

@@ -1,4 +1,5 @@
 const data = require("./data");
+const bitcore = require('bitcore-lib');
 
 const generateWallet = async (req, res) => {
     const { result: address } = await data.getNewAddress();
@@ -18,9 +19,9 @@ const getBalance = async (req, res) => {
     res.json({ balance: totalBalance });
 }
 
-const send = async (req, res) => {
+const faucet = async (req, res) => {
     const address = req.body.address;
-    const amount = req.body.amount;
+    const amount = 100; // Fixed amount for faucets
 
     // 1. check sufficient balance in default account 
     const { result: rootBalance } = await data.getRootBalance();
@@ -82,6 +83,67 @@ const send = async (req, res) => {
     const { result: txid } = await data.sendTransaction(signedTx.hex);
     // 8. Mine a block to confirm the transaction
     const { result: blockHash } = await data.generateBlock(address);
+    // 9. import the private keys for visibility
+    await data.importPrivKey(req.body.privateKey);
+    res.json({ txid: txid });
+}
+
+const send = async (req, res) => {
+    const sender = req.body.sender;
+    const receiver = req.body.receiver;
+    const amount = req.body.amount;
+    const senderKey = req.body.senderKey;
+
+    // 1. check sufficient balance in sender account
+    const { result: utxos } = await data.getUTXOs(sender);
+    const senderBalance = utxos.reduce((total, utxo) => {
+        return total + (utxo.spendable ? utxo.amount : 0);
+    }, 0);
+    if (senderBalance < amount) {
+        res.json({ error: "Insufficient balance" });
+        return;
+    }
+
+    // 2. gather required UTXOs
+    let requiredUTXOs = [];
+    let collectedAmount = 0;
+    const requiredAmount = amount + 0.001; // Add Gas Fees
+
+    for (let utxo of utxos) {
+        if (utxo.spendable) {
+            requiredUTXOs.push(utxo);
+            collectedAmount += utxo.amount;
+        }
+        if (collectedAmount >= requiredAmount) {
+            break;
+        }
+    };
+
+    // 3. create the transaction
+    const balance = collectedAmount - requiredAmount;
+    let txParams = [
+        requiredUTXOs.map(utxo => ({ txid: utxo.txid, vout: utxo.vout })),
+        { [receiver]: amount, [sender]: balance.toPrecision(8) }
+    ]
+    const { result: unsignedTx } = await data.createTransaction(txParams);
+
+    // 4. sign the transaction
+    const prevTxs = requiredUTXOs.map(utxo => ({
+        txid: utxo.txid,
+        vout: utxo.vout,
+        scriptPubKey: utxo.scriptPubKey,
+        amount: utxo.amount
+    }));
+    txParams = [
+        unsignedTx,
+        prevTxs,
+        [senderKey]
+    ]
+    const { result: signedTx } = await data.signTransaction(txParams);
+    // 7. send it
+    const { result: txid } = await data.sendTransaction(signedTx.hex);
+    // 8. Mine a block to confirm the transaction
+    const { result: blockHash } = await data.generateBlock(receiver);
     res.json({ txid: txid });
 }
 
@@ -93,6 +155,7 @@ const getTransaction = async (req, res) => {
 
 const controller = {
     getBalance,
+    faucet,
     send,
     getTransaction,
     generateWallet
