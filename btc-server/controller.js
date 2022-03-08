@@ -13,17 +13,12 @@ const getPubkeyFromTx = async (txid, vo) => {
 const getBalance = async (req, res) => {
     const address = req.query.address;
     const { result: utxos } = await data.getUTXOs(address);
+    let balance = 0;
     if (utxos.length !== 0) {
-        const balance = utxos.reduce((total, utxo) => {
+        balance = utxos.reduce((total, utxo) => {
             return total + utxo.amount;
-        }, 0);
-        return res.json({ balance: balance.toPrecision(8) });
-    }
-    const { result } = await data.listTransactions(["outside", 10, 0, true]);
-    const Txs = result.filter(tx => tx.category === "receive" && tx.address === address)
-    const balance = Txs.reduce((total, tx) => {
-        return total + tx.amount;
-    }, 0);
+        }, 0);        
+    }  
     res.json({ balance: balance });
 }
 
@@ -107,20 +102,12 @@ const send = async (req, res) => {
     // 1. check sufficient balance in sender account
     const { result: utxos } = await data.getUTXOs(sender);
     let senderBalance;
-    let inputs = [];
     if (utxos.length !== 0) {
         senderBalance = utxos.reduce((total, utxo) => {
             return total + utxo.amount;
-        }, 0);
-        inputs = utxos.map(utxo => ({ txid: utxo.txid, vout: utxo.vout, amount: utxo.amount, address: utxo.address }));
-    } else {
-        const { result } = await data.listTransactions(["outside", 10, 0, true]);
-        const Txs = result.filter(tx => tx.category === "receive" && tx.address === address)
-        senderBalance = Txs.reduce((total, tx) => {
-            return total + tx.amount;
-        }, 0);
-        inputs = utxos.map(utxo => ({ txid: utxo.txid, vout: utxo.vout, amount: utxo.amount, address: utxo.address }));
-    }
+        }, 0);        
+    } 
+    
     if (senderBalance < amount) {
         res.json({ error: "Insufficient balance" });
         return;
@@ -128,10 +115,10 @@ const send = async (req, res) => {
     
     // 2. prepare inputs    
     const satoshiToSend = amount * 100000000;
-    const prevTxs = await Promise.all(inputs.map(async utxo => ({
+    const prevTxs = await Promise.all(utxos.map(async utxo => ({
         txid: utxo.txid,
         outputIndex: utxo.vout,
-        script: await getPubkeyFromTx(utxo.txid, utxo.vout),
+        script: utxo.scriptPubKey,
         satoshis: Math.floor(Number(utxo.amount) * 100000000),
         address: utxo.address
     })));
@@ -147,7 +134,7 @@ const send = async (req, res) => {
     transaction.sign(senderKey);
     const signedTx = transaction.serialize();
     // 5. send it
-    await data.importPrivKey(senderKey);
+    // await data.importPrivKey(senderKey);
     const { result: txid } = await data.sendTransaction(signedTx);
     // 6. Mine a block to confirm the transaction
     const { result: blockHash } = await data.generateBlock(senderKey);
@@ -159,7 +146,6 @@ const getTransaction = async (req, res) => {
     const { result } = await data.getTransaction(txid);
     res.json(result);
 }
-
 
 const controller = {
     getBalance,
