@@ -1,4 +1,5 @@
 const data = require("./data");
+const bitcore = require('bitcore-lib');
 
 
 const getPubkeyFromTx = async (txid, vo) => {
@@ -7,15 +8,6 @@ const getPubkeyFromTx = async (txid, vo) => {
 
     const requiredVout = decodedTx.vout.find(vout => vout.n === vo);
     return requiredVout.scriptPubKey.hex;
-}
-
-const generateWallet = async (req, res) => {
-    const { result: address } = await data.getNewAddress();
-    const { result: privateKey } = await data.dumpPrivateKey(address);
-    res.json({
-        address,
-        privateKey
-    })
 }
 
 const getBalance = async (req, res) => {
@@ -120,58 +112,44 @@ const send = async (req, res) => {
         senderBalance = utxos.reduce((total, utxo) => {
             return total + utxo.amount;
         }, 0);
-        inputs = utxos.map(utxo => ({ txid: utxo.txid, vout: utxo.vout, amount: utxo.amount }));
+        inputs = utxos.map(utxo => ({ txid: utxo.txid, vout: utxo.vout, amount: utxo.amount, address: utxo.address }));
     } else {
         const { result } = await data.listTransactions(["outside", 10, 0, true]);
         const Txs = result.filter(tx => tx.category === "receive" && tx.address === address)
         senderBalance = Txs.reduce((total, tx) => {
             return total + tx.amount;
         }, 0);
-        inputs = utxos.map(utxo => ({ txid: utxo.txid, vout: utxo.vout, amount: utxo.amount }));
+        inputs = utxos.map(utxo => ({ txid: utxo.txid, vout: utxo.vout, amount: utxo.amount, address: utxo.address }));
     }
     if (senderBalance < amount) {
         res.json({ error: "Insufficient balance" });
         return;
     }
-
-    // 2. gather required UTXOs or TXs
-    let collectedAmount = 0;
-    let requiredInputs = [];
-    const requiredAmount = amount + 0.001; // Add Gas Fees
-
-    for (let input of inputs) {
-        requiredInputs.push(input);
-        collectedAmount += input.amount;
-        if (collectedAmount >= requiredAmount) {
-            break;
-        }
-    };
-
-    // 3. create the transaction
-    const balance = collectedAmount - requiredAmount;
-    let txParams = [
-        requiredInputs.map(input => ({ txid: input.txid, vout: input.vout })),
-        { [receiver]: amount, [sender]: balance.toPrecision(8) }
-    ]
-    const { result: unsignedTx } = await data.createTransaction(txParams);
-
-    // 4. sign the transaction
-    const prevTxs = await Promise.all(requiredInputs.map(async utxo => ({
+    
+    // 2. prepare inputs    
+    const satoshiToSend = amount * 100000000;
+    const prevTxs = await Promise.all(inputs.map(async utxo => ({
         txid: utxo.txid,
-        vout: utxo.vout,
-        scriptPubKey: await getPubkeyFromTx(utxo.txid, utxo.vout),
-        amount: utxo.amount
+        outputIndex: utxo.vout,
+        script: await getPubkeyFromTx(utxo.txid, utxo.vout),
+        satoshis: Math.floor(Number(utxo.amount) * 100000000),
+        address: utxo.address
     })));
-    txParams = [
-        unsignedTx,
-        prevTxs,
-        [senderKey]
-    ]
-    const { result: signedTx } = await data.signTransaction(txParams);    
-    // // 7. send it
+
+    // 3. Create the transaction
+    const transaction = new bitcore.Transaction();
+    transaction.from(prevTxs);
+    transaction.to(receiver, satoshiToSend);
+    transaction.fee(0.001 * 100000000);
+    transaction.change(sender);
+
+    // 4. Sign the transaction
+    transaction.sign(senderKey);
+    const signedTx = transaction.serialize();
+    // 5. send it
     await data.importPrivKey(senderKey);
-    const { result: txid } = await data.sendTransaction(signedTx.hex);
-    // // 8. Mine a block to confirm the transaction
+    const { result: txid } = await data.sendTransaction(signedTx);
+    // 6. Mine a block to confirm the transaction
     const { result: blockHash } = await data.generateBlock(senderKey);
     res.json({ txid: txid });
 }
@@ -187,8 +165,7 @@ const controller = {
     getBalance,
     faucet,
     send,
-    getTransaction,
-    generateWallet
+    getTransaction
 }
 
 module.exports = controller;
