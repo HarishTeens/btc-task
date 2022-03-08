@@ -27,12 +27,12 @@ const getUTXOs = async (address = "") => {
 }
 
 const createTransaction = async (txParams) => {
-    const {data} = await rpcHelper('createrawtransaction', txParams);
+    const { data } = await rpcHelper('createrawtransaction', txParams);
     return data;
 }
 
-const importPrivKey = async (privKey) => {
-    const { data } = await rpcHelper('importprivkey', [privKey, "", false]);
+const importAddress = async (address) => {
+    const { data } = await rpcHelper('importaddress', [address, "outside"]);
     return data;
 }
 
@@ -88,7 +88,7 @@ const data = {
     generateBlock,
     listTransactions,
     getNewAddress,
-    importPrivKey
+    importAddress
 }
 
 module.exports = data;

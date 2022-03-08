@@ -1,5 +1,4 @@
 const data = require("./data");
-const bitcore = require('bitcore-lib');
 
 const generateWallet = async (req, res) => {
     const { result: address } = await data.getNewAddress();
@@ -12,16 +11,20 @@ const generateWallet = async (req, res) => {
 
 const getBalance = async (req, res) => {
     const address = req.query.address;
-    const response = await data.getUTXOs(address);
-    const totalBalance = response.result.reduce((total, utxo) => {
-        return total + (utxo.spendable ? utxo.amount : 0);
+    const { result } = await data.listTransactions(["outside", 10, 0, true]);
+    const balance = result.filter(tx => tx.category === "receive" && tx.address === address).reduce((total, tx) => {
+        return total + tx.amount;
     }, 0);
-    res.json({ balance: totalBalance });
+
+    res.json({ balance: balance });
 }
 
 const faucet = async (req, res) => {
     const address = req.body.address;
     const amount = 100; // Fixed amount for faucets
+
+    // 0. Import Address as watchonly    
+    await data.importAddress(req.body.address);
 
     // 1. check sufficient balance in default account 
     const { result: rootBalance } = await data.getRootBalance();
@@ -83,8 +86,7 @@ const faucet = async (req, res) => {
     const { result: txid } = await data.sendTransaction(signedTx.hex);
     // 8. Mine a block to confirm the transaction
     const { result: blockHash } = await data.generateBlock(address);
-    // 9. import the private keys for visibility
-    await data.importPrivKey(req.body.privateKey);
+
     res.json({ txid: txid });
 }
 
