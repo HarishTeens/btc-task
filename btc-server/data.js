@@ -10,6 +10,15 @@ const listTransactions = async (params = []) => {
     const { data } = await rpcHelper('listtransactions', params);
     return data;
 }
+const getRawTransaction = async (txid) => {
+    const { data } = await rpcHelper('getrawtransaction', [txid]);
+    return data;
+}
+
+const decodeRawTransaction = async (rawTx) => {
+    const { data } = await rpcHelper('decoderawtransaction', [rawTx]);
+    return data;
+}
 
 const getNewAddress = async () => {
     const { data } = await rpcHelper('getnewaddress', []);
@@ -33,6 +42,11 @@ const createTransaction = async (txParams) => {
 
 const importAddress = async (address) => {
     const { data } = await rpcHelper('importaddress', [address, "outside"]);
+    return data;
+}
+
+const importPrivKey = async (privKey) => {
+    const { data } = await rpcHelper('importprivkey', [privKey, "outside"]);
     return data;
 }
 
@@ -88,7 +102,10 @@ const data = {
     generateBlock,
     listTransactions,
     getNewAddress,
-    importAddress
+    importAddress,
+    getRawTransaction,
+    decodeRawTransaction,
+    importPrivKey
 }
 
 module.exports = data;

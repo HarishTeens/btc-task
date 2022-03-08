@@ -1,5 +1,14 @@
 const data = require("./data");
 
+
+const getPubkeyFromTx = async (txid, vo) => {
+    const { result } = await data.getRawTransaction(txid);
+    const { result: decodedTx } = await data.decodeRawTransaction(result);
+
+    const requiredVout = decodedTx.vout.find(vout => vout.n === vo);
+    return requiredVout.scriptPubKey.hex;
+}
+
 const generateWallet = async (req, res) => {
     const { result: address } = await data.getNewAddress();
     const { result: privateKey } = await data.dumpPrivateKey(address);
@@ -11,11 +20,18 @@ const generateWallet = async (req, res) => {
 
 const getBalance = async (req, res) => {
     const address = req.query.address;
+    const { result: utxos } = await data.getUTXOs(address);
+    if (utxos.length !== 0) {
+        const balance = utxos.reduce((total, utxo) => {
+            return total + utxo.amount;
+        }, 0);
+        return res.json({ balance: balance.toPrecision(8) });
+    }
     const { result } = await data.listTransactions(["outside", 10, 0, true]);
-    const balance = result.filter(tx => tx.category === "receive" && tx.address === address).reduce((total, tx) => {
+    const Txs = result.filter(tx => tx.category === "receive" && tx.address === address)
+    const balance = Txs.reduce((total, tx) => {
         return total + tx.amount;
     }, 0);
-
     res.json({ balance: balance });
 }
 
@@ -98,24 +114,34 @@ const send = async (req, res) => {
 
     // 1. check sufficient balance in sender account
     const { result: utxos } = await data.getUTXOs(sender);
-    const senderBalance = utxos.reduce((total, utxo) => {
-        return total + (utxo.spendable ? utxo.amount : 0);
-    }, 0);
+    let senderBalance;
+    let inputs = [];
+    if (utxos.length !== 0) {
+        senderBalance = utxos.reduce((total, utxo) => {
+            return total + utxo.amount;
+        }, 0);
+        inputs = utxos.map(utxo => ({ txid: utxo.txid, vout: utxo.vout, amount: utxo.amount }));
+    } else {
+        const { result } = await data.listTransactions(["outside", 10, 0, true]);
+        const Txs = result.filter(tx => tx.category === "receive" && tx.address === address)
+        senderBalance = Txs.reduce((total, tx) => {
+            return total + tx.amount;
+        }, 0);
+        inputs = utxos.map(utxo => ({ txid: utxo.txid, vout: utxo.vout, amount: utxo.amount }));
+    }
     if (senderBalance < amount) {
         res.json({ error: "Insufficient balance" });
         return;
     }
 
-    // 2. gather required UTXOs
-    let requiredUTXOs = [];
+    // 2. gather required UTXOs or TXs
     let collectedAmount = 0;
+    let requiredInputs = [];
     const requiredAmount = amount + 0.001; // Add Gas Fees
 
-    for (let utxo of utxos) {
-        if (utxo.spendable) {
-            requiredUTXOs.push(utxo);
-            collectedAmount += utxo.amount;
-        }
+    for (let input of inputs) {
+        requiredInputs.push(input);
+        collectedAmount += input.amount;
         if (collectedAmount >= requiredAmount) {
             break;
         }
@@ -124,28 +150,29 @@ const send = async (req, res) => {
     // 3. create the transaction
     const balance = collectedAmount - requiredAmount;
     let txParams = [
-        requiredUTXOs.map(utxo => ({ txid: utxo.txid, vout: utxo.vout })),
+        requiredInputs.map(input => ({ txid: input.txid, vout: input.vout })),
         { [receiver]: amount, [sender]: balance.toPrecision(8) }
     ]
     const { result: unsignedTx } = await data.createTransaction(txParams);
 
     // 4. sign the transaction
-    const prevTxs = requiredUTXOs.map(utxo => ({
+    const prevTxs = await Promise.all(requiredInputs.map(async utxo => ({
         txid: utxo.txid,
         vout: utxo.vout,
-        scriptPubKey: utxo.scriptPubKey,
+        scriptPubKey: await getPubkeyFromTx(utxo.txid, utxo.vout),
         amount: utxo.amount
-    }));
+    })));
     txParams = [
         unsignedTx,
         prevTxs,
         [senderKey]
     ]
-    const { result: signedTx } = await data.signTransaction(txParams);
-    // 7. send it
+    const { result: signedTx } = await data.signTransaction(txParams);    
+    // // 7. send it
+    await data.importPrivKey(senderKey);
     const { result: txid } = await data.sendTransaction(signedTx.hex);
-    // 8. Mine a block to confirm the transaction
-    const { result: blockHash } = await data.generateBlock(receiver);
+    // // 8. Mine a block to confirm the transaction
+    const { result: blockHash } = await data.generateBlock(senderKey);
     res.json({ txid: txid });
 }
 
@@ -154,6 +181,7 @@ const getTransaction = async (req, res) => {
     const { result } = await data.getTransaction(txid);
     res.json(result);
 }
+
 
 const controller = {
     getBalance,
