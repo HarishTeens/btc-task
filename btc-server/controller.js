@@ -2,14 +2,6 @@ const data = require("./data");
 const bitcore = require('bitcore-lib');
 
 
-const getPubkeyFromTx = async (txid, vo) => {
-    const { result } = await data.getRawTransaction(txid);
-    const { result: decodedTx } = await data.decodeRawTransaction(result);
-
-    const requiredVout = decodedTx.vout.find(vout => vout.n === vo);
-    return requiredVout.scriptPubKey.hex;
-}
-
 const getBalance = async (req, res) => {
     const address = req.query.address;
     const { result: utxos } = await data.getUTXOs(address);
@@ -134,7 +126,6 @@ const send = async (req, res) => {
     transaction.sign(senderKey);
     const signedTx = transaction.serialize();
     // 5. send it
-    // await data.importPrivKey(senderKey);
     const { result: txid } = await data.sendTransaction(signedTx);
     // 6. Mine a block to confirm the transaction
     const { result: blockHash } = await data.generateBlock(senderKey);
