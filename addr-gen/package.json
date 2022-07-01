@@ -1,0 +1,24 @@
+{
+  "name": "addr-gen",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "b58": "^4.0.3",
+    "bech32": "^2.0.0",
+    "bip32": "^2.0.6",
+    "bip39": "^3.0.4",
+    "bitcoinjs-lib": "^6.0.1",
+    "bitcore-mnemonic": "^8.25.30",
+    "bs58check": "^2.1.2",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.0.1"
+  }
+}
