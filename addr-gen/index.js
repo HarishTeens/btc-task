@@ -19,8 +19,8 @@ const modifiedZpub = convertZpub(zpub, false);
 const network = bitcoin.networks.bitcoin;
 const bipMaster = 84; // Purpose Node using Bip84 for Segwit
 const isTestNet = false;
-const coinNode = +isTestNet;  // Coin Node 0 for Mainnet 1 for Testnet
-const accountNode = 0; // Account Node 
+const coinIndex = +isTestNet;  // Coin Node 0 for Mainnet 1 for Testnet
+const accountIndex = 0; // Account Node 
 const chainIndex = 0; // Chain Index 0 for Receive 1 for Change
 const addressIndex = 6; // Address Index [0..n]
 
@@ -33,15 +33,29 @@ function main() {
 function getSegwitAddressFromMnemonic(mnemonic) {
     const seed = bip39.mnemonicToSeedSync(mnemonic);
 
-    const data = bip32.fromSeed(seed, network) // Master Node
-        .deriveHardened(bipMaster)
-        .deriveHardened(coinNode)
-        .deriveHardened(accountNode)
-        .derive(chainIndex)
-        .derive(addressIndex)
-        .publicKey;
+    // Master Node
+    const masterNode = bip32.fromSeed(seed, network).deriveHardened(bipMaster);
+    showProps(masterNode);
 
-    return getAddressFromPubKey(data);
+    // Coin Node
+    const coinNode = masterNode.deriveHardened(coinIndex);
+    showProps(coinNode);
+
+    // Account Node
+    const accountNode = coinNode.deriveHardened(accountIndex);
+    showProps(coinNode);
+
+    // Chain Node
+    const chainNode = accountNode.derive(chainIndex);
+    showProps(chainNode);
+
+    // Address Node
+    const addressNode = chainNode.derive(addressIndex);
+    showProps(addressNode);
+
+    const publicKey = addressNode.publicKey;
+
+    return getAddressFromPubKey(publicKey);
 }
 
 function getSegwitAddressFromZpub(zpub) {
@@ -89,6 +103,12 @@ function getAddressFromPubKey(data) {
     const bech32Words = bech32.toWords(Buffer.from(ripemd160Digest, 'hex'));
     const words = new Uint8Array([0, ...bech32Words]);
     return bech32.encode(isTestNet ? 'tb' : 'bc', Array.from(words));
+}
+
+function showProps(node) {
+    console.log(
+        node
+    )
 }
 
 main();
